@@ -1,6 +1,7 @@
 import asyncio
 import nest_asyncio
 from telegram import Update
+from telegram import Bot
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext, ContextTypes
 import discord
 from dotenv import load
@@ -15,9 +16,12 @@ load()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 DISCORD_CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID"))
+TELEGRAM_CHAT_ID = int(os.getenv("TELEGRAM_CHAT_ID"))
+TELEGRAM_TOPIC_ID = int(os.getenv("TELEGRAM_TOPIC_ID"))
 
 # === Telegram ===
 telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
+telegram_bot = Bot(token=TELEGRAM_TOKEN)
 
 # Эта функция получает список участников в голосовых каналах
 async def get_voice_members():
@@ -37,7 +41,9 @@ async def voice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Telegram: команда /start
 async def tg_start(update: Update, context: CallbackContext):
-    await update.message.reply_text("Привет из Telegram!")
+    #await update.message.reply_text("Привет из Telegram!")
+    chat = update.effective_chat
+    await update.message.reply_text(f"Chat ID: {chat.id}")
 
 # Telegram: пересылка в Discord
 async def tg_forward(update: Update, context: CallbackContext):
@@ -65,6 +71,49 @@ intents.voice_states = True
 
 
 discord_bot = discord.Client(intents=intents)
+
+@discord_bot.event
+async def on_message(message):
+    # Игнорировать свои сообщения
+    if message.author == discord_bot.user:
+        return
+
+    # Получаем имя и текст
+    author_name = message.author.display_name
+    content_text = f"*{author_name}* в Discord:\n{message.content or '📷'}"
+
+    # Если есть вложения (attachments)
+    if message.attachments:
+        for attachment in message.attachments:
+            # Проверим, является ли файл изображением
+            if attachment.content_type and attachment.content_type.startswith("image/"):
+                # Скачиваем и отправляем изображение с подписью
+                await telegram_bot.send_photo(
+                    chat_id=TELEGRAM_CHAT_ID,
+                    photo=attachment.url,
+                    caption=content_text,
+                    parse_mode="Markdown",
+                    message_thread_id=TELEGRAM_TOPIC_ID
+                )
+                return  # Отправили — выходим
+            else:
+                # Другой тип файла — отправим как ссылку
+                await telegram_bot.send_message(
+                    chat_id=TELEGRAM_CHAT_ID,
+                    text=f"{content_text}\n\n📎 Вложение: {attachment.url}",
+                    parse_mode="Markdown",
+                    message_thread_id=TELEGRAM_TOPIC_ID
+                )
+                return
+
+    # Если просто текстовое сообщение
+    if message.content:
+        await telegram_bot.send_message(
+            chat_id=TELEGRAM_CHAT_ID,
+            text=content_text,
+            parse_mode="Markdown",
+            message_thread_id=TELEGRAM_TOPIC_ID
+        )
 
 @discord_bot.event
 async def on_ready():
