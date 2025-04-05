@@ -3,18 +3,18 @@ import nest_asyncio
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext, ContextTypes
 import discord
-from dotenv import load_dotenv
+from dotenv import load
 import os
 
 
 nest_asyncio.apply()
 
 # === Токены и настройки ===
-load_dotenv()
+load()
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-TELEGRAM_CHAT_ID = int(os.getenv("TELEGRAM_CHAT_ID"))
+DISCORD_CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID"))
 
 # === Telegram ===
 telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
