@@ -4,8 +4,11 @@ from telegram import Update
 from telegram import Bot
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext, ContextTypes
 import discord
+from discord.ext import commands
 from dotenv import load
 import os
+import random
+import re
 
 
 nest_asyncio.apply()
@@ -45,23 +48,8 @@ async def tg_start(update: Update, context: CallbackContext):
     chat = update.effective_chat
     await update.message.reply_text(f"Chat ID: {chat.id}")
 
-# Telegram: пересылка в Discord
-async def tg_forward(update: Update, context: CallbackContext):
-    text = update.message.text
-    user = update.message.from_user.full_name
-
-    # Отвечаем в Telegram
-    await update.message.reply_text(f"Пересылаю в Discord: {text}")
-
-    # Пересылаем в Discord
-    if discord_bot.is_ready():
-        channel = discord_bot.get_channel(DISCORD_CHANNEL_ID)
-        if channel:
-            await channel.send(f"Сообщение из Telegram от **{user}**:\n{text}")
-
 telegram_app.add_handler(CommandHandler("start", tg_start))
 telegram_app.add_handler(CommandHandler("voice", voice_command))
-telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, tg_forward))
 
 # === Discord ===
 intents = discord.Intents.default()
@@ -70,13 +58,15 @@ intents.members = True
 intents.voice_states = True
 
 
-discord_bot = discord.Client(intents=intents)
+discord_bot = commands.Bot(command_prefix="!", intents=intents)
 
 @discord_bot.event
 async def on_message(message):
     # Игнорировать свои сообщения
     if message.author == discord_bot.user:
         return
+    
+    await discord_bot.process_commands(message)
 
     # Получаем имя и текст
     author_name = message.author.display_name
@@ -115,6 +105,7 @@ async def on_message(message):
             message_thread_id=TELEGRAM_TOPIC_ID
         )
 
+
 @discord_bot.event
 async def on_ready():
     print(f"[Discord] Бот запущен как {discord_bot.user}")
@@ -122,6 +113,64 @@ async def on_ready():
         print(f"🛡️ Сервер: {guild.name}")
         for channel in guild.text_channels:
             print(f"  📺 Канал: {channel.name} (ID: {channel.id})")
+
+
+@discord_bot.event
+async def on_connect():
+    try:
+        synced = await discord_bot.tree.sync()
+        print(f"Slash-команды синхронизированы: {len(synced)} шт.")
+    except Exception as e:
+        print(f"Ошибка при sync: {e}")
+
+
+@discord_bot.tree.command(name="dice", description="Кинуть кубик с заданным числом граней")
+async def dice(interaction: discord.Interaction, sides: str = "6"):
+    # Парсим число граней
+    match = re.search(r'(\d+)', sides)
+    arg = int(match.group(1)) if match else 6
+
+    # Проверка на минимальное количество граней
+    if arg < 2:
+        await interaction.response.send_message("ИДИОТ! 🎲 Кубик должен иметь минимум 2 грани!", ephemeral=False)
+        return
+
+    # Бросок кубика
+    number = random.randint(1, arg)
+    await interaction.response.send_message(f"🎲 Выпало: {number} (из {arg})", ephemeral=False)
+
+@discord_bot.command(name="dice")
+async def dice_text(ctx, arg: str = "6"):
+    import re
+
+    # Парсим число: либо просто число, либо что-то вроде dice100
+    match = re.search(r'(\d+)', arg)
+    sides = int(match.group(1)) if match else 6
+
+    if sides < 2:
+        await ctx.send("ИДИОТ! 🎲 Кубик должен иметь минимум 2 грани!")
+        return
+
+    number = random.randint(1, sides)
+    await ctx.send(f"🎲 Выпало: {number} (из {sides})")
+
+@discord_bot.command(name="choose")
+async def dice_text(ctx, *args):
+    number = random.randint(0, len(args) - 1)
+    await ctx.send(f"Побеждает {args[number]}!")
+
+@discord_bot.tree.command(name="choose")
+async def dice_text(interaction: discord.Interaction, choices: str):
+    number = random.randint(0, len(choices.split()) - 1)
+    await interaction.response.send_message(f"Побеждает {choices.split()[number]}! ({choices})")
+
+@discord_bot.command(name="purge")
+async def purge(ctx, n: int = 5):
+    # Получаем список последних n сообщений в текущем канале
+    deleted = await ctx.channel.purge(limit=n, check=lambda message: message.author == discord_bot.user)
+    
+    # Информируем пользователя, сколько сообщений было удалено
+    await ctx.send(f"Удалено {len(deleted)} сообщений от бота.", delete_after=5)
 
 # === Главная функция ===
 async def main():
@@ -131,7 +180,8 @@ async def main():
     await telegram_app.start()
     await telegram_app.updater.start_polling()
 
-    await discord_bot.start(DISCORD_TOKEN)
+    await discord_bot.run(DISCORD_TOKEN)
+    
 
 # === Запуск ===
 if __name__ == "__main__":
