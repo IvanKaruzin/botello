@@ -5,16 +5,16 @@ from telegram import Bot
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext, ContextTypes
 import discord
 from discord.ext import commands
-from dotenv import load
+from dotenv import load_dotenv
 import os
 import random
 import re
-
+from keep_alive import keep_alive
 
 nest_asyncio.apply()
 
 # === Токены и настройки ===
-load()
+load_dotenv()
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
@@ -25,6 +25,7 @@ TELEGRAM_TOPIC_ID = int(os.getenv("TELEGRAM_TOPIC_ID"))
 # === Telegram ===
 telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
 telegram_bot = Bot(token=TELEGRAM_TOKEN)
+
 
 # Эта функция получает список участников в голосовых каналах
 async def get_voice_members():
@@ -37,16 +38,19 @@ async def get_voice_members():
                     report += f"  - {member.display_name}\n"
     return report or "Никого нет в голосовых каналах."
 
+
 # Обработчик Telegram-команды /голос
 async def voice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     report = await get_voice_members()
     await update.message.reply_text(report, parse_mode="Markdown")
+
 
 # Telegram: команда /start
 async def tg_start(update: Update, context: CallbackContext):
     #await update.message.reply_text("Привет из Telegram!")
     chat = update.effective_chat
     await update.message.reply_text(f"Chat ID: {chat.id}")
+
 
 telegram_app.add_handler(CommandHandler("start", tg_start))
 telegram_app.add_handler(CommandHandler("voice", voice_command))
@@ -57,15 +61,15 @@ intents.message_content = True
 intents.members = True
 intents.voice_states = True
 
-
 discord_bot = commands.Bot(command_prefix="!", intents=intents)
+
 
 @discord_bot.event
 async def on_message(message):
     # Игнорировать свои сообщения
     if message.author == discord_bot.user:
         return
-    
+
     await discord_bot.process_commands(message)
 
     # Получаем имя и текст
@@ -76,15 +80,15 @@ async def on_message(message):
     if message.attachments:
         for attachment in message.attachments:
             # Проверим, является ли файл изображением
-            if attachment.content_type and attachment.content_type.startswith("image/"):
+            if attachment.content_type and attachment.content_type.startswith(
+                    "image/"):
                 # Скачиваем и отправляем изображение с подписью
                 await telegram_bot.send_photo(
                     chat_id=TELEGRAM_CHAT_ID,
                     photo=attachment.url,
                     caption=content_text,
                     parse_mode="Markdown",
-                    message_thread_id=TELEGRAM_TOPIC_ID
-                )
+                    message_thread_id=TELEGRAM_TOPIC_ID)
                 return  # Отправили — выходим
             else:
                 # Другой тип файла — отправим как ссылку
@@ -92,18 +96,15 @@ async def on_message(message):
                     chat_id=TELEGRAM_CHAT_ID,
                     text=f"{content_text}\n\n📎 Вложение: {attachment.url}",
                     parse_mode="Markdown",
-                    message_thread_id=TELEGRAM_TOPIC_ID
-                )
+                    message_thread_id=TELEGRAM_TOPIC_ID)
                 return
 
     # Если просто текстовое сообщение
     if message.content:
-        await telegram_bot.send_message(
-            chat_id=TELEGRAM_CHAT_ID,
-            text=content_text,
-            parse_mode="Markdown",
-            message_thread_id=TELEGRAM_TOPIC_ID
-        )
+        await telegram_bot.send_message(chat_id=TELEGRAM_CHAT_ID,
+                                        text=content_text,
+                                        parse_mode="Markdown",
+                                        message_thread_id=TELEGRAM_TOPIC_ID)
 
 
 @discord_bot.event
@@ -124,7 +125,8 @@ async def on_connect():
         print(f"Ошибка при sync: {e}")
 
 
-@discord_bot.tree.command(name="dice", description="Кинуть кубик с заданным числом граней")
+@discord_bot.tree.command(name="dice",
+                          description="Кинуть кубик с заданным числом граней")
 async def dice(interaction: discord.Interaction, sides: str = "6"):
     # Парсим число граней
     match = re.search(r'(\d+)', sides)
@@ -132,12 +134,15 @@ async def dice(interaction: discord.Interaction, sides: str = "6"):
 
     # Проверка на минимальное количество граней
     if arg < 2:
-        await interaction.response.send_message("ИДИОТ! 🎲 Кубик должен иметь минимум 2 грани!", ephemeral=False)
+        await interaction.response.send_message(
+            "ИДИОТ! 🎲 Кубик должен иметь минимум 2 грани!", ephemeral=False)
         return
 
     # Бросок кубика
     number = random.randint(1, arg)
-    await interaction.response.send_message(f"🎲 Выпало: {number} (из {arg})", ephemeral=False)
+    await interaction.response.send_message(f"🎲 Выпало: {number} (из {arg})",
+                                            ephemeral=False)
+
 
 @discord_bot.command(name="dice")
 async def dice_text(ctx, arg: str = "6"):
@@ -154,34 +159,42 @@ async def dice_text(ctx, arg: str = "6"):
     number = random.randint(1, sides)
     await ctx.send(f"🎲 Выпало: {number} (из {sides})")
 
+
 @discord_bot.command(name="choose")
 async def dice_text(ctx, *args):
     number = random.randint(0, len(args) - 1)
     await ctx.send(f"Побеждает {args[number]}!")
 
+
 @discord_bot.tree.command(name="choose")
 async def dice_text(interaction: discord.Interaction, choices: str):
     number = random.randint(0, len(choices.split()) - 1)
-    await interaction.response.send_message(f"Побеждает {choices.split()[number]}! ({choices})")
+    await interaction.response.send_message(
+        f"Побеждает {choices.split()[number]}! ({choices})")
+
 
 @discord_bot.command(name="purge")
 async def purge(ctx, n: int = 5):
     # Получаем список последних n сообщений в текущем канале
-    deleted = await ctx.channel.purge(limit=n, check=lambda message: message.author == discord_bot.user)
-    
+    deleted = await ctx.channel.purge(
+        limit=n, check=lambda message: message.author == discord_bot.user)
+
     # Информируем пользователя, сколько сообщений было удалено
-    await ctx.send(f"Удалено {len(deleted)} сообщений от бота.", delete_after=5)
+    await ctx.send(f"Удалено {len(deleted)} сообщений от бота.",
+                   delete_after=5)
+
 
 # === Главная функция ===
 async def main():
     print("Запуск Telegram и Discord ботов...")
 
+    keep_alive()
     await telegram_app.initialize()
     await telegram_app.start()
     await telegram_app.updater.start_polling()
 
     await discord_bot.run(DISCORD_TOKEN)
-    
+
 
 # === Запуск ===
 if __name__ == "__main__":
