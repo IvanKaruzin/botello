@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 import os
 import random
 import re
-from keep_alive import keep_alive
+
 
 nest_asyncio.apply()
 
@@ -188,12 +188,10 @@ async def purge(ctx, n: int = 5):
 async def main():
     print("Запуск Telegram и Discord ботов...")
 
-    keep_alive()
     await telegram_app.initialize()
     await telegram_app.start()
     await telegram_app.updater.start_polling()
-
-    await discord_bot.run(DISCORD_TOKEN)
+    await discord_bot.start(DISCORD_TOKEN)
 
 
 # === Запуск ===
