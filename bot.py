@@ -63,6 +63,7 @@ intents.voice_states = True
 
 discord_bot = commands.Bot(command_prefix="!", intents=intents)
 
+slash_command_responses = {}
 
 @discord_bot.event
 async def on_message(message):
@@ -124,6 +125,12 @@ async def on_connect():
     except Exception as e:
         print(f"Ошибка при sync: {e}")
 
+def track_slash_response(channel_id: int, message: discord.Message):
+    """Добавляет сообщение в список для отслеживания"""
+    if channel_id not in slash_command_responses:
+        slash_command_responses[channel_id] = []
+    slash_command_responses[channel_id].append(message)
+
 
 @discord_bot.tree.command(name="dice",
                           description="Кинуть кубик с заданным числом граней")
@@ -142,6 +149,8 @@ async def dice(interaction: discord.Interaction, sides: str = "6"):
     number = random.randint(1, arg)
     await interaction.response.send_message(f"🎲 Выпало: {number} (из {arg})",
                                             ephemeral=False)
+    message = await interaction.original_response()
+    track_slash_response(interaction.channel.id, message)   
 
 
 @discord_bot.command(name="dice")
@@ -166,11 +175,14 @@ async def dice_text(ctx, *args):
     await ctx.send(f"Побеждает {args[number]}!")
 
 
-@discord_bot.tree.command(name="choose")
+@discord_bot.tree.command(name="choose", 
+                          description = "Выбор из нескольких вариантов.")
 async def dice_text(interaction: discord.Interaction, choices: str):
     number = random.randint(0, len(choices.split()) - 1)
     await interaction.response.send_message(
         f"Побеждает {choices.split()[number]}! ({choices})")
+    message = await interaction.original_response()
+    track_slash_response(interaction.channel.id, message)
 
 
 @discord_bot.command(name="purge")
@@ -182,6 +194,32 @@ async def purge(ctx, n: int = 5):
     # Информируем пользователя, сколько сообщений было удалено
     await ctx.send(f"Удалено {len(deleted)} сообщений от бота.",
                    delete_after=5)
+
+@discord_bot.command(name="purge_slash")
+async def clear_slash_replies(ctx, count: int = 1):
+    """Удаляет последние ответы на слеш-команды (по умолчанию: 1)"""
+    channel_id = ctx.channel.id
+    
+    if channel_id not in slash_command_responses or not slash_command_responses[channel_id]:
+        await ctx.send("❌ Нет ответов на слеш-команды в этом канале.", delete_after=5)
+        await ctx.message.delete(delay=5)
+        return
+    
+    deleted = 0
+    for msg in slash_command_responses[channel_id][-count:]:
+        try:
+            await msg.delete()
+            deleted += 1
+        except discord.NotFound:
+            continue
+        except discord.Forbidden:
+            await ctx.send("⚠️ У меня нет прав удалять сообщения!", delete_after=5)
+            await ctx.message.delete(delay=5)
+            return
+    
+    slash_command_responses[channel_id] = slash_command_responses[channel_id][:-deleted]
+    await ctx.send(f"✅ Удалено {deleted} ответов на слеш-команды.", delete_after=5)
+    await ctx.message.delete(delay=5)
 
 
 # === Главная функция ===
