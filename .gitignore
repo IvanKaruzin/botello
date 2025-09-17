@@ -1,15 +1,2 @@
 .env
-.env.test
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-.replit
-pyproject.toml
-uv.lock
-
-.vscode
-!.vscode/extensions.json
-
-logs
-*.log
+__pycache__/
