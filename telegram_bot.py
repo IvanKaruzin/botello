@@ -1,4 +1,3 @@
-import asyncio
 from telegram import Update, Bot
 from telegram.ext import Application, CommandHandler, ContextTypes
 

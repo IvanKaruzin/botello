@@ -1,4 +1,5 @@
 import discord
+from financial_data_parser import FinancialDataParser
 from discord.ext import commands
 import random
 import re
@@ -7,7 +8,7 @@ import re
 class DiscordBot:
     def __init__(self, token: str):
         self.token = token
-
+        self.fin_parser = FinancialDataParser()
         intents = discord.Intents.default()
         intents.message_content = True
         intents.members = True
@@ -39,7 +40,7 @@ class DiscordBot:
 
     def setup_commands(self):
         # === SLASH команды ===
-        @self.bot.tree.command(name="dice", description="Кинуть кубик с заданным числом граней")
+        @self.bot.tree.command(name="dice", description="Кинуть кубик с заданным числом граней.")
         async def dice(interaction: discord.Interaction, sides: str = "6"):
             match = re.search(r'(\d+)', sides)
             arg = int(match.group(1)) if match else 6
@@ -52,6 +53,13 @@ class DiscordBot:
 
             number = random.randint(1, arg)
             await interaction.response.send_message(f"🎲 Выпало: {number} (из {arg})")
+            message = await interaction.original_response()
+            self.track_slash_response(interaction.channel.id, message)
+
+        @self.bot.tree.command(name="dollar", description="Показывает текущий курс доллара.")
+        async def dollar(interaction: discord.Interaction):
+            data = self.fin_parser.get_usd_rub()
+            await interaction.response.send_message(f"Курс доллара\n 1$ = {data}₽")
             message = await interaction.original_response()
             self.track_slash_response(interaction.channel.id, message)
 
