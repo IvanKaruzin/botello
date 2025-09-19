@@ -56,10 +56,15 @@ class DiscordBot:
             message = await interaction.original_response()
             self.track_slash_response(interaction.channel.id, message)
 
-        @self.bot.tree.command(name="dollar", description="Показывает текущий курс доллара.")
-        async def dollar(interaction: discord.Interaction):
-            data = self.fin_parser.get_usd_rub()
-            await interaction.response.send_message(f"Курс доллара\n 1$ = {data}₽")
+        @self.bot.tree.command(name="fininfo", description="Актуальная финансовая информация.")
+        async def fininfo(interaction: discord.Interaction):
+            dollar_rate = self.fin_parser.get_usd_rub()
+            bitcoin_rate = self.fin_parser.get_btc_price()
+            moex_rate = self.fin_parser.get_moex_index()
+            await interaction.response.send_message(
+                f"{'Курс доллара':<20} | {'Курс биткоина':<20}\n"
+                f"{f'1$ = {dollar_rate}₽':<20} | {f'{bitcoin_rate}$':<20}"
+                )
             message = await interaction.original_response()
             self.track_slash_response(interaction.channel.id, message)
 

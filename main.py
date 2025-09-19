@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from telegram_bot import TelegramBot
 from discord_bot import DiscordBot
 
-
+ 
 async def main():
     # Загружаем токены
     load_dotenv()
